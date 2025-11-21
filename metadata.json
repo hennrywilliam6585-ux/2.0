@@ -1,0 +1,5 @@
+{
+  "name": "Crypto Education - Online Trading Platform",
+  "description": "A comprehensive online trading platform dashboard created with React and Tailwind CSS. It features a detailed admin panel for managing users, trades, settings, and content, as well as a user-facing interface for trading and account management, replicating the UI of the Crypto Education platform.",
+  "requestFramePermissions": []
+}
