@@ -1,50 +1,23 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, Trash2, Mail, Send } from 'lucide-react';
-
-interface Subscriber {
-    id: number;
-    email: string;
-    createdAt: string;
-}
-
-const INITIAL_SUBSCRIBERS: Subscriber[] = [
-    { id: 1, email: 'alex@example.com', createdAt: '2023-01-15 10:00 AM' },
-    { id: 2, email: 'sarah@test.co', createdAt: '2023-02-20 02:30 PM' },
-    { id: 3, email: 'crypto.fan@domain.net', createdAt: '2023-03-10 09:15 AM' },
-    { id: 4, email: 'investor123@money.org', createdAt: '2023-04-05 11:45 AM' },
-    { id: 5, email: 'newsletter@daily.com', createdAt: '2023-05-12 04:20 PM' },
-    { id: 6, email: 'john.doe@gmail.com', createdAt: '2023-06-18 08:00 AM' },
-    { id: 7, email: 'jane.smith@yahoo.com', createdAt: '2023-07-22 01:10 PM' },
-];
+import { useAuth } from '../../AuthContext';
 
 const Subscribers: React.FC = () => {
-    const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
+    const { allSubscribers, deleteSubscriber } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
 
-    useEffect(() => {
-        const stored = localStorage.getItem('cryptoSubscribers');
-        if (stored) {
-            setSubscribers(JSON.parse(stored));
-        } else {
-            setSubscribers(INITIAL_SUBSCRIBERS);
-            localStorage.setItem('cryptoSubscribers', JSON.stringify(INITIAL_SUBSCRIBERS));
-        }
-    }, []);
-
-    const handleDelete = (id: number) => {
+    const handleDelete = async (id: string) => {
         if (window.confirm('Are you sure you want to remove this subscriber?')) {
-            const updated = subscribers.filter(s => s.id !== id);
-            setSubscribers(updated);
-            localStorage.setItem('cryptoSubscribers', JSON.stringify(updated));
+            await deleteSubscriber(id);
         }
     };
 
     const handleSendNewsletter = () => {
-        alert('Newsletter sending feature is simulating...');
+        alert('Newsletter feature is currently in simulation mode.');
     };
 
-    const filteredSubscribers = subscribers.filter(s => 
+    const filteredSubscribers = allSubscribers.filter(s => 
         s.email.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
@@ -73,7 +46,7 @@ const Subscribers: React.FC = () => {
                 <table className="min-w-full bg-white dark:bg-slate-800">
                     <thead className="bg-gray-50 dark:bg-slate-700">
                         <tr>
-                            <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600 dark:text-gray-300">#</th>
+                            <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600 dark:text-gray-300">ID</th>
                             <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600 dark:text-gray-300">Email</th>
                             <th className="text-left py-3 px-4 uppercase font-semibold text-sm text-gray-600 dark:text-gray-300">Subscribe At</th>
                             <th className="text-right py-3 px-4 uppercase font-semibold text-sm text-gray-600 dark:text-gray-300">Action</th>
@@ -83,7 +56,7 @@ const Subscribers: React.FC = () => {
                         {filteredSubscribers.length > 0 ? (
                             filteredSubscribers.map((subscriber, index) => (
                                 <tr key={subscriber.id} className="border-b border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-700/50">
-                                    <td className="py-3 px-4">{index + 1}</td>
+                                    <td className="py-3 px-4 text-xs text-gray-500">{subscriber.id}</td>
                                     <td className="py-3 px-4">
                                         <div className="flex items-center gap-2">
                                             <div className="bg-blue-100 dark:bg-blue-900/30 p-1.5 rounded-full text-blue-600 dark:text-blue-400">
@@ -92,7 +65,7 @@ const Subscribers: React.FC = () => {
                                             {subscriber.email}
                                         </div>
                                     </td>
-                                    <td className="py-3 px-4">{subscriber.createdAt}</td>
+                                    <td className="py-3 px-4 text-sm">{subscriber.createdAt ? new Date(subscriber.createdAt).toLocaleString() : 'N/A'}</td>
                                     <td className="py-3 px-4 text-right">
                                         <button 
                                             onClick={() => handleDelete(subscriber.id)} 
@@ -115,7 +88,7 @@ const Subscribers: React.FC = () => {
                 </table>
             </div>
              <div className="mt-4 flex justify-between items-center text-sm text-gray-500 dark:text-gray-400">
-                <p>Showing {filteredSubscribers.length} of {subscribers.length} subscribers</p>
+                <p>Showing {filteredSubscribers.length} subscribers</p>
             </div>
         </div>
     );

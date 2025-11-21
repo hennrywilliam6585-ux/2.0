@@ -13,7 +13,7 @@ import { getStorage } from "firebase/storage";
 // 5. IMPORTANT: Go to "Authentication" > "Sign-in method" and enable "Email/Password".
 // 6. Create a Firestore Database in "test mode" or "production mode" with appropriate rules.
 
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyDMp_KCNEp8xYYmQWcxLA8bgTIs6Utm9aA",
   authDomain: "cryptotradingapp-ab34e.firebaseapp.com",
   projectId: "cryptotradingapp-ab34e",

@@ -124,3 +124,9 @@ export interface Notification {
   timestamp: string;
   read: boolean;
 }
+
+export interface Subscriber {
+  id: string;
+  email: string;
+  createdAt: string;
+}

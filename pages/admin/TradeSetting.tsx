@@ -74,11 +74,17 @@ const AdminTradeSetting: React.FC = () => {
             .map(s => parseInt(s.trim()))
             .filter(n => !isNaN(n) && n > 0);
 
+        // Helper to handle empty or invalid number inputs
+        const parseNumber = (value: string) => {
+            const parsed = parseFloat(value);
+            return isNaN(parsed) ? 0 : parsed;
+        };
+
         const updatedSettings = {
             tradingEnabled: localSettings.tradingEnabled,
-            profitPercentage: parseFloat(localSettings.profitPercentage),
-            minTradeAmount: parseFloat(localSettings.minTradeAmount),
-            maxTradeAmount: parseFloat(localSettings.maxTradeAmount),
+            profitPercentage: parseNumber(localSettings.profitPercentage),
+            minTradeAmount: parseNumber(localSettings.minTradeAmount),
+            maxTradeAmount: parseNumber(localSettings.maxTradeAmount),
             durationOptions: durationArray.length > 0 ? durationArray : [60]
         };
 

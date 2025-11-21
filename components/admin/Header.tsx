@@ -32,7 +32,7 @@ const Header: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (arg: boolean) =>
     };
     document.addEventListener('click', clickHandler);
     return () => document.removeEventListener('click', clickHandler);
-  });
+  }, [dropdownOpen]);
 
   // close on click outside for notifications
   useEffect(() => {
@@ -48,7 +48,7 @@ const Header: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (arg: boolean) =>
     };
     document.addEventListener('click', clickHandler);
     return () => document.removeEventListener('click', clickHandler);
-  });
+  }, [notifOpen]);
 
   return (
     <header className="sticky top-0 z-40 flex w-full bg-white dark:bg-slate-800 drop-shadow-sm">
@@ -84,7 +84,15 @@ const Header: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (arg: boolean) =>
           </button>
 
           <div className="relative">
-            <button ref={notifTrigger} onClick={() => setNotifOpen(!notifOpen)} className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700">
+            <button 
+                ref={notifTrigger} 
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setNotifOpen(!notifOpen);
+                    setDropdownOpen(false);
+                }} 
+                className="relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-slate-700"
+            >
               <Bell className="h-6 w-6 text-gray-600 dark:text-gray-300" />
               {unreadCount > 0 && (
                   <span className="absolute top-0 right-0 h-4 w-4 rounded-full bg-red-500 text-white text-xs flex items-center justify-center animate-pulse">
@@ -150,7 +158,15 @@ const Header: React.FC<{ sidebarOpen: boolean; setSidebarOpen: (arg: boolean) =>
           </div>
           
           <div className="relative">
-            <button ref={trigger} onClick={() => setDropdownOpen(!dropdownOpen)} className="flex items-center gap-3">
+            <button 
+                ref={trigger} 
+                onClick={(e) => {
+                    e.stopPropagation();
+                    setDropdownOpen(!dropdownOpen);
+                    setNotifOpen(false);
+                }} 
+                className="flex items-center gap-3"
+            >
               <span className="hidden text-right lg:block">
                 <span className="block text-sm font-medium text-black dark:text-white">{user?.fullName || 'Admin'}</span>
                 <span className="block text-xs text-gray-600 dark:text-gray-400">Administrator</span>

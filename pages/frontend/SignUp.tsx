@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../AuthContext';
@@ -12,7 +13,7 @@ const SignUp: React.FC = () => {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const { signup } = useAuth();
+    const { signup, systemSettings } = useAuth();
     const navigate = useNavigate();
 
     const validateEmail = (email: string) => {
@@ -56,11 +57,15 @@ const SignUp: React.FC = () => {
             <div className="w-full max-w-md">
                 <div className="bg-slate-800/50 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl p-8">
                     <div className="text-center mb-8">
-                        <div className="inline-flex items-center justify-center h-16 w-16 bg-primary rounded-full mb-4">
-                            <svg className="w-8 h-8 text-white" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"></path></svg>
+                        <div className="inline-flex items-center justify-center h-16 w-16 bg-primary/20 rounded-full mb-4">
+                             {systemSettings.logoUrl ? (
+                                <img src={systemSettings.logoUrl} alt="Logo" className="h-10 w-10 object-contain" />
+                            ) : (
+                                <svg className="w-8 h-8 text-primary" viewBox="0 0 24 24" fill="currentColor"><path d="M5 9.2h3V19H5zM10.6 5h2.8v14h-2.8zm5.6 8H19v6h-2.8z"></path></svg>
+                            )}
                         </div>
                         <h1 className="text-3xl font-bold text-white">Create an Account</h1>
-                        <p className="text-gray-400">Join Crypto Education Today</p>
+                        <p className="text-gray-400">Join {systemSettings.siteTitle || 'Crypto Education'} Today</p>
                     </div>
                     
                     <form className="space-y-4" onSubmit={handleSubmit}>

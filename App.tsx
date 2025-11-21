@@ -23,6 +23,9 @@ import ManageUsers from './pages/admin/ManageUsers';
 import AdminDeposits from './pages/admin/Deposits';
 import AdminWithdrawals from './pages/admin/Withdrawals';
 import AdminSupport from './pages/admin/Support';
+import LogoFaviconSettings from './pages/admin/LogoFaviconSettings';
+import SystemConfigurationPage from './pages/admin/SystemConfiguration';
+import ComingSoon from './pages/admin/ComingSoon';
 
 // User Pages
 import UserDashboard from './pages/user/Dashboard';
@@ -42,7 +45,18 @@ const AppContent: React.FC = () => {
 
   useEffect(() => {
       document.title = systemSettings.siteTitle || "Crypto Education - Online Trading Platform";
-  }, [systemSettings.siteTitle]);
+      
+      // Dynamic Favicon Update
+      if (systemSettings.faviconUrl) {
+          let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+          if (!link) {
+              link = document.createElement('link');
+              link.rel = 'icon';
+              document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = systemSettings.faviconUrl;
+      }
+  }, [systemSettings]);
 
   if (loading) {
     return (
@@ -93,6 +107,27 @@ const AppContent: React.FC = () => {
         <Route path="deposits" element={<AdminDeposits />} />
         <Route path="withdrawals" element={<AdminWithdrawals />} />
         <Route path="support" element={<AdminSupport />} />
+        <Route path="logo-favicon" element={<LogoFaviconSettings />} />
+        <Route path="system-configuration" element={<SystemConfigurationPage />} />
+        
+        {/* Placeholder Routes for System Settings */}
+        <Route path="notification-settings" element={<ComingSoon title="Notification Settings" />} />
+        <Route path="payment-gateways" element={<ComingSoon title="Payment Gateways" />} />
+        <Route path="withdrawal-methods" element={<ComingSoon title="Withdrawal Methods" />} />
+        <Route path="seo-configuration" element={<ComingSoon title="SEO Configuration" />} />
+        <Route path="manage-frontend" element={<ComingSoon title="Manage Frontend" />} />
+        <Route path="manage-pages" element={<ComingSoon title="Manage Pages" />} />
+        <Route path="kyc-setting" element={<ComingSoon title="KYC Settings" />} />
+        <Route path="social-login" element={<ComingSoon title="Social Login" />} />
+        <Route path="language" element={<ComingSoon title="Language Settings" />} />
+        <Route path="extensions" element={<ComingSoon title="Extensions" />} />
+        <Route path="cron-job" element={<ComingSoon title="Cron Job Settings" />} />
+        <Route path="policy-pages" element={<ComingSoon title="Policy Pages" />} />
+        <Route path="maintenance-mode" element={<ComingSoon title="Maintenance Mode" />} />
+        <Route path="gdpr-cookie" element={<ComingSoon title="GDPR Cookie" />} />
+        <Route path="custom-css" element={<ComingSoon title="Custom CSS" />} />
+        <Route path="sitemap" element={<ComingSoon title="Sitemap XML" />} />
+        <Route path="robots-txt" element={<ComingSoon title="Robots.txt" />} />
       </Route>
       
       <Route path="*" element={<Navigate to={isAuthenticated ? (user?.role === 'admin' ? "/admin/dashboard" : "/dashboard") : "/login"} />} />

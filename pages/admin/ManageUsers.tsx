@@ -5,7 +5,7 @@ import { useAuth } from '../../AuthContext';
 import { Plus, Search, X, Trash2, Wallet, Power, Ban, CheckCircle, Gift, AlertTriangle, Edit } from 'lucide-react';
 
 const ManageUsers: React.FC = () => {
-    const { allUsers, addUser, deleteUser, modifyUserBalance, toggleUserStatus, giveBonus, updateUserData } = useAuth();
+    const { allUsers, addUser, deleteUser, modifyUserBalance, addManualDeposit, toggleUserStatus, giveBonus, updateUserData } = useAuth();
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [newUser, setNewUser] = useState({
@@ -114,9 +114,15 @@ const ManageUsers: React.FC = () => {
             return;
         }
 
-        const finalAmount = balanceAction === 'add' ? amount : -amount;
-        
-        const result = await modifyUserBalance(selectedUserForBalance.id, finalAmount);
+        let result;
+        if (balanceAction === 'add') {
+            // Use addManualDeposit to generate a log
+            result = await addManualDeposit(selectedUserForBalance.id, amount);
+        } else {
+            // Subtract
+            result = await modifyUserBalance(selectedUserForBalance.id, -amount);
+        }
+
         showNotification(result.success ? 'success' : 'error', result.message);
 
         if (result.success) {

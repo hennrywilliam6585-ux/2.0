@@ -4,7 +4,7 @@ import { Download, Upload, HardDriveDownload, AlertTriangle, FileUp } from 'luci
 import { useAuth } from '../../AuthContext';
 
 const DataManagement: React.FC = () => {
-    const { allUsers, allDeposits, allWithdrawals, allSupportTickets, systemSettings, tradeSettings } = useAuth();
+    const { allUsers, allDeposits, allWithdrawals, allSupportTickets, systemSettings, tradeSettings, notifications, cryptoCurrencies, allSubscribers, restoreDatabase } = useAuth();
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleExport = () => {
@@ -15,9 +15,9 @@ const DataManagement: React.FC = () => {
             tickets: allSupportTickets,
             systemSettings,
             tradeSettings,
-            notifications: JSON.parse(localStorage.getItem('crypto_notifications') || '[]'),
-            currencies: JSON.parse(localStorage.getItem('crypto_currencies') || '[]'),
-            subscribers: JSON.parse(localStorage.getItem('cryptoSubscribers') || '[]'),
+            notifications: notifications,
+            currencies: cryptoCurrencies,
+            subscribers: allSubscribers,
             exportDate: new Date().toISOString()
         };
 
@@ -40,23 +40,18 @@ const DataManagement: React.FC = () => {
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             try {
                 const json = JSON.parse(event.target?.result as string);
                 
-                if (confirm('Are you sure you want to restore this backup? Current data will be overwritten.')) {
-                    if(json.users) localStorage.setItem('crypto_users', JSON.stringify(json.users));
-                    if(json.deposits) localStorage.setItem('crypto_deposits', JSON.stringify(json.deposits));
-                    if(json.withdrawals) localStorage.setItem('crypto_withdrawals', JSON.stringify(json.withdrawals));
-                    if(json.tickets) localStorage.setItem('crypto_tickets', JSON.stringify(json.tickets));
-                    if(json.systemSettings) localStorage.setItem('crypto_system_settings', JSON.stringify(json.systemSettings));
-                    if(json.tradeSettings) localStorage.setItem('crypto_trade_settings', JSON.stringify(json.tradeSettings));
-                    if(json.notifications) localStorage.setItem('crypto_notifications', JSON.stringify(json.notifications));
-                    if(json.currencies) localStorage.setItem('crypto_currencies', JSON.stringify(json.currencies));
-                    if(json.subscribers) localStorage.setItem('cryptoSubscribers', JSON.stringify(json.subscribers));
-                    
-                    alert('Data restored successfully! The page will now reload.');
-                    window.location.reload();
+                if (confirm('Are you sure you want to restore this backup? This will overwrite existing data in your Firestore database.')) {
+                    const result = await restoreDatabase(json);
+                    if (result.success) {
+                        alert(result.message);
+                        window.location.reload();
+                    } else {
+                        alert(`Restore failed: ${result.message}`);
+                    }
                 }
             } catch (error) {
                 alert('Failed to parse backup file. Please ensure it is a valid JSON file.');
@@ -128,12 +123,12 @@ const DataManagement: React.FC = () => {
                             <div className="flex items-start gap-3">
                                 <AlertTriangle className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" size={18} />
                                 <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                                    <strong>Warning:</strong> Importing a database will overwrite all current data. This action cannot be undone.
+                                    <strong>Warning:</strong> Importing will write data directly to your Firestore database. Ensure your JSON file is valid and from a trusted export.
                                 </p>
                             </div>
                         </div>
                         <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed mb-6">
-                            Select a valid JSON backup file to restore your platform data. The page will reload automatically upon successful import.
+                            Select a valid JSON backup file to restore your platform data.
                         </p>
                     </div>
 
