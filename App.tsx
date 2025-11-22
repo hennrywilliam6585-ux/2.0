@@ -62,10 +62,23 @@ const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-slate-900">
-         <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-12 w-12 text-primary animate-spin" />
-            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium tracking-wide">Loading...</p>
+      <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-slate-900 relative overflow-hidden">
+         <div className="absolute inset-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm z-10"></div>
+         <div className="flex flex-col items-center gap-6 z-20 relative animate-fade-in">
+            <div className="relative">
+                <div className="h-16 w-16 rounded-full border-4 border-primary/30 border-t-primary animate-spin"></div>
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                    {systemSettings.logoUrl ? (
+                        <img src={systemSettings.logoUrl} className="h-8 w-8 object-contain opacity-80" alt="Logo" />
+                    ) : (
+                        <div className="h-6 w-6 bg-primary/80 rounded-full"></div>
+                    )}
+                </div>
+            </div>
+            <div className="text-center space-y-1">
+                <p className="text-gray-800 dark:text-white text-lg font-semibold tracking-wide">Please wait...</p>
+                <p className="text-gray-500 dark:text-gray-400 text-xs font-medium tracking-wider uppercase">Initializing App</p>
+            </div>
         </div>
       </div>
     );
@@ -114,7 +127,7 @@ const AppContent: React.FC = () => {
         <Route path="support" element={<AdminSupport />} />
         <Route path="logo-favicon" element={<LogoFaviconSettings />} />
         <Route path="system-configuration" element={<SystemConfigurationPage />} />
-        <Route path="notification-settings" element={<Subscribers />} /> {/* Using Subscribers page for Notification Settings temporarily if needed, or keeping it separate */}
+        <Route path="notification-settings" element={<Subscribers />} />
         
         {/* Placeholder Routes for System Settings */}
         <Route path="payment-gateways" element={<ComingSoon title="Payment Gateways" />} />

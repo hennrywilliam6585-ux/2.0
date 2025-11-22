@@ -271,58 +271,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // 1. Initialize Auth Listener
     useEffect(() => {
+        // We use onAuthStateChanged to track the logged-in user.
+        // IMPORTANT: This effect must NOT depend on 'user' or 'firebaseUser' state,
+        // otherwise it will create an infinite loop of re-renders and re-subscriptions.
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setFirebaseUser(currentUser);
+            
             if (currentUser) {
-                // If user state is already set (by login function), skip fetching to avoid race condition flicker
-                // We only fetch if user state is null (page reload)
-                if (!user || user.id !== currentUser.uid) {
-                    try {
-                        // Fetch user profile from Firestore
-                        const userDocRef = doc(db, 'users', currentUser.uid);
-                        const userSnapshot = await getDoc(userDocRef);
+                try {
+                    const userDocRef = doc(db, 'users', currentUser.uid);
+                    const userSnapshot = await getDoc(userDocRef);
+                    
+                    if (userSnapshot.exists()) {
+                        const data = userSnapshot.data();
+                        const email = data.email || currentUser.email || '';
+                        const role = getRoleFromEmail(email, data.role);
+
+                        setUser({ 
+                            id: currentUser.uid, 
+                            ...data,
+                            availableBalance: typeof data.availableBalance === 'number' ? data.availableBalance : 0,
+                            role: role,
+                            fullName: data.fullName || currentUser.displayName || 'User',
+                            email: email
+                        } as User);
+                    } else {
+                        // CRITICAL FIX: If doc doesn't exist, create it to prevent "No document to update" error later
+                        const email = currentUser.email || '';
+                        const role = getRoleFromEmail(email);
                         
-                        if (userSnapshot.exists()) {
-                            const data = userSnapshot.data();
-                            const email = data.email || currentUser.email || '';
-                            const role = getRoleFromEmail(email, data.role);
-
-                            setUser({ 
-                                id: currentUser.uid, 
-                                ...data,
-                                availableBalance: typeof data.availableBalance === 'number' ? data.availableBalance : 0,
-                                role: role,
-                                fullName: data.fullName || currentUser.displayName || 'User',
-                                email: email
-                            } as User);
-                        } else {
-                            const email = currentUser.email || '';
-                            const role = getRoleFromEmail(email);
-
-                            setUser({
-                                id: currentUser.uid,
-                                email: email,
-                                fullName: currentUser.displayName || 'User',
-                                role: role, 
-                                availableBalance: 0,
-                                status: 'Active'
-                            } as User);
-                        }
+                        const newUser: User = {
+                            id: currentUser.uid,
+                            fullName: currentUser.displayName || 'User',
+                            email: email,
+                            role: role,
+                            availableBalance: Number(DEFAULT_SYSTEM_SETTINGS.newUserBalance) || 0,
+                            profilePictureUrl: currentUser.photoURL || '',
+                            status: 'Active',
+                            tradeHistory: [],
+                            openTrades: [],
+                            lastSeen: new Date().toISOString(),
+                            joinedAt: new Date().toISOString()
+                        };
                         
-                        loadSettings();
-                    } catch (e: any) {
-                         const email = currentUser.email || '';
-                         const role = getRoleFromEmail(email);
-
-                         setUser({
-                             id: currentUser.uid,
-                             email: email,
-                             fullName: currentUser.displayName || 'User',
-                             role: role, 
-                             availableBalance: 0, 
-                             status: 'Active'
-                         } as User);
+                        await setDoc(userDocRef, newUser);
+                        setUser(newUser);
                     }
+                    loadSettings();
+                } catch (e: any) {
+                    console.error("Error initializing user:", e);
+                    // Fallback to avoid crash, but DB ops might fail
+                    const email = currentUser.email || '';
+                    setUser({
+                        id: currentUser.uid,
+                        email: email,
+                        fullName: currentUser.displayName || 'User',
+                        role: getRoleFromEmail(email), 
+                        availableBalance: 0, 
+                        status: 'Active'
+                    } as User);
                 }
             } else {
                 setUser(null);
@@ -331,7 +338,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(false);
         });
         return () => unsubscribe();
-    }, [user]); // Add user as dep to check if we need to fetch
+    }, []); // Empty dependency array to prevent infinite loops
 
     // 2. Live Data Listeners
     useEffect(() => {
@@ -345,15 +352,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const email = data.email || firebaseUser.email || '';
                     const role = getRoleFromEmail(email, data.role);
 
-                    setUser(prev => ({ 
-                        ...prev, // Keep existing state to avoid jitter
-                        id: docSnap.id, 
-                        ...data,
-                        availableBalance: typeof data.availableBalance === 'number' ? data.availableBalance : 0,
-                        role: role,
-                        fullName: data.fullName || firebaseUser.displayName || 'User',
-                        email: email
-                    } as User));
+                    setUser(prev => {
+                         // Only update if data changed to avoid render loops
+                         const newUser = { 
+                            id: docSnap.id, 
+                            ...data,
+                            availableBalance: typeof data.availableBalance === 'number' ? data.availableBalance : 0,
+                            role: role,
+                            fullName: data.fullName || firebaseUser.displayName || 'User',
+                            email: email
+                        } as User;
+
+                        if (prev && JSON.stringify(prev) === JSON.stringify(newUser)) return prev;
+                        return newUser;
+                    });
                 }
             },
             (error) => handleSnapshotError(error, "Error listening to user profile")
@@ -533,12 +545,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     email: email
                 } as User;
             } else {
+                 // Fallback if doc missing, create it to be safe
                  const role = getRoleFromEmail(email);
                  userData = {
                      id: uid, email,
                      fullName: userCredential.user.displayName || 'User',
                      role: role, availableBalance: 0, status: 'Active'
                  } as User;
+                 await setDoc(userDocRef, userData);
             }
             
             setUser(userData);
@@ -588,7 +602,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const adjustBalance = async (amount: number) => {
         if (user) {
-            try { await updateDoc(doc(db, 'users', user.id), { availableBalance: increment(amount) }); } catch (error) { console.error("Error adjusting balance", error); }
+            try { 
+                const userRef = doc(db, 'users', user.id);
+                // Ensure document exists before update
+                const snap = await getDoc(userRef);
+                if (!snap.exists()) {
+                    await setDoc(userRef, user);
+                }
+                await updateDoc(userRef, { availableBalance: increment(amount) }); 
+            } catch (error) { 
+                console.error("Error adjusting balance", error); 
+            }
         }
     };
 
@@ -599,8 +623,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         try {
             const userRef = doc(db, 'users', user.id);
             const userSnap = await getDoc(userRef);
-            if (!userSnap.exists()) throw new Error("User not found");
-            const userData = userSnap.data();
+            
+            // Ensure document exists
+            if (!userSnap.exists()) {
+                // Auto-heal: create the user doc if missing
+                await setDoc(userRef, user);
+            }
+
+            const userData = userSnap.exists() ? userSnap.data() : user;
             const newOpenTrades = [trade, ...(userData.openTrades || [])];
             
             await updateDoc(userRef, { availableBalance: increment(-amount), openTrades: newOpenTrades });
@@ -770,7 +800,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const updateProfile = async (profileData: Partial<User>) => {
         if (!user) return { success: false, message: 'Not authenticated' };
         try {
-            await updateDoc(doc(db, 'users', user.id), profileData);
+            const userRef = doc(db, 'users', user.id);
+            // Ensure doc exists
+            const snap = await getDoc(userRef);
+            if (!snap.exists()) await setDoc(userRef, user);
+            
+            await updateDoc(userRef, profileData);
             return { success: true, message: 'Profile updated successfully.' };
         } catch (error) {
             return { success: false, message: getFriendlyErrorMessage(error) };
@@ -813,6 +848,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 if (deposit.status !== 'Pending') throw "Already processed";
 
                 const userRef = doc(db, 'users', deposit.userId);
+                const userDoc = await transaction.get(userRef);
+                if (!userDoc.exists()) {
+                    // Handle case where user was deleted or data is corrupt
+                     throw "User not found";
+                }
+                
                 transaction.update(depositRef, { status: 'Successful' });
                 transaction.update(userRef, { availableBalance: increment(deposit.amount) });
             });
