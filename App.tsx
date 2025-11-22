@@ -4,6 +4,7 @@ import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from './ThemeContext';
 import { AuthProvider, useAuth } from './AuthContext';
 import ErrorBoundary from './components/common/ErrorBoundary';
+import { Loader2 } from 'lucide-react';
 
 // Layouts
 import AdminLayout from './components/layouts/AdminLayout';
@@ -26,6 +27,7 @@ import AdminSupport from './pages/admin/Support';
 import LogoFaviconSettings from './pages/admin/LogoFaviconSettings';
 import SystemConfigurationPage from './pages/admin/SystemConfiguration';
 import ComingSoon from './pages/admin/ComingSoon';
+import Subscribers from './pages/admin/Subscribers';
 
 // User Pages
 import UserDashboard from './pages/user/Dashboard';
@@ -60,8 +62,11 @@ const AppContent: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-light-gray dark:bg-slate-900">
-        <p className="text-xl text-gray-800 dark:text-gray-200">Loading...</p>
+      <div className="flex h-screen w-full items-center justify-center bg-gray-50 dark:bg-slate-900">
+         <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-12 w-12 text-primary animate-spin" />
+            <p className="text-gray-500 dark:text-gray-400 text-sm font-medium tracking-wide">Loading...</p>
+        </div>
       </div>
     );
   }
@@ -109,9 +114,9 @@ const AppContent: React.FC = () => {
         <Route path="support" element={<AdminSupport />} />
         <Route path="logo-favicon" element={<LogoFaviconSettings />} />
         <Route path="system-configuration" element={<SystemConfigurationPage />} />
+        <Route path="notification-settings" element={<Subscribers />} /> {/* Using Subscribers page for Notification Settings temporarily if needed, or keeping it separate */}
         
         {/* Placeholder Routes for System Settings */}
-        <Route path="notification-settings" element={<ComingSoon title="Notification Settings" />} />
         <Route path="payment-gateways" element={<ComingSoon title="Payment Gateways" />} />
         <Route path="withdrawal-methods" element={<ComingSoon title="Withdrawal Methods" />} />
         <Route path="seo-configuration" element={<ComingSoon title="SEO Configuration" />} />

@@ -5,57 +5,21 @@ import CandlestickChart, { CandlestickData } from '../../components/common/Candl
 import type { OpenTrade, UserTradeLog as TradeHistoryItem } from '../../types';
 import { ArrowUp, ArrowDown, ShieldAlert, Loader2 } from 'lucide-react';
 
-const PAIR_DATA: { [key: string]: { name: string; basePrice: number; } } = {
-    'BTC/USD': { name: 'Bitcoin', basePrice: 66535.50 },
-    'ETH/USD': { name: 'Ethereum', basePrice: 3800 },
-    'LTC/USD': { name: 'Litecoin', basePrice: 150 },
-    'USDT/USD': { name: 'Tether', basePrice: 1 },
-    'BNB/USD': { name: 'BNB', basePrice: 600 },
-    'USDC/USD': { name: 'USD Coin', basePrice: 1 },
-    'XRP/USD': { name: 'XRP', basePrice: 0.52 },
-    'ADA/USD': { name: 'Cardano', basePrice: 0.45 },
-    'SOL/USD': { name: 'Solana', basePrice: 145.00 },
+// Map internal pairs to Binance symbols
+const BINANCE_SYMBOL_MAP: { [key: string]: string } = {
+    'BTC/USD': 'btcusdt',
+    'ETH/USD': 'ethusdt',
+    'LTC/USD': 'ltcusdt',
+    'USDT/USD': 'usdcusdt', // Note: USDT/USD is effectively USDC/USDT or similar stable pair
+    'BNB/USD': 'bnbusdt',
+    'USDC/USD': 'usdcusdt',
+    'XRP/USD': 'xrpusdt',
+    'ADA/USD': 'adausdt',
+    'SOL/USD': 'solusdt',
 };
 
-const COIN_IDS: { [key: string]: string } = {
-    'BTC/USD': 'bitcoin',
-    'ETH/USD': 'ethereum',
-    'LTC/USD': 'litecoin',
-    'USDT/USD': 'tether',
-    'BNB/USD': 'binancecoin',
-    'USDC/USD': 'usd-coin',
-    'XRP/USD': 'ripple',
-    'ADA/USD': 'cardano',
-    'SOL/USD': 'solana',
-};
-
-const generateCandle = (lastCandle: CandlestickData, basePrice: number): CandlestickData => {
-    const volatility = basePrice * 0.0005;
-    const open = lastCandle.close;
-    const close = open + (Math.random() - 0.5) * volatility;
-    const high = Math.max(open, close) + Math.random() * (volatility / 2);
-    const low = Math.min(open, close) - Math.random() * (volatility / 2);
-    const time = lastCandle.time + 60; // next minute
-    return { time, open, high, low, close };
-};
-
-const generateInitialData = (basePrice: number): CandlestickData[] => {
-    const data: CandlestickData[] = [];
-    let lastClose = basePrice;
-    const now = Date.now();
-    for (let i = 119; i >= 0; i--) { // 120 minutes of data
-        const time = Math.floor((now - i * 60 * 1000) / 1000);
-        const volatility = basePrice * 0.005;
-        const open = lastClose;
-        const close = open + (Math.random() - 0.5) * volatility;
-        const high = Math.max(open, close) + Math.random() * (volatility / 2);
-        const low = Math.min(open, close) - Math.random() * (volatility / 2);
-        const candle = { time, open, high, low, close };
-        data.push(candle);
-        lastClose = candle.close;
-    }
-    return data;
-};
+// Pairs available for selection
+const AVAILABLE_PAIRS_LIST = Object.keys(BINANCE_SYMBOL_MAP);
 
 interface CountdownTimerProps {
     expiry: number;
@@ -81,41 +45,48 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ expiry }) => {
 const TradeNow: React.FC = () => {
     const { user, placeTrade, cryptoCurrencies, resolveTrades, tradeSettings } = useAuth();
     
-    const availablePairs = useMemo(() => {
-        const enabledPairSymbols = cryptoCurrencies.filter(c => c.status === 'Enabled').map(c => c.symbol);
-        return Object.keys(PAIR_DATA).filter(pair => enabledPairSymbols.includes(pair.split('/')[0]));
+    // Filter available pairs based on enabled crypto settings
+    const enabledPairs = useMemo(() => {
+        const enabledSymbols = cryptoCurrencies.filter(c => c.status === 'Enabled').map(c => c.symbol);
+        return AVAILABLE_PAIRS_LIST.filter(pair => {
+            const base = pair.split('/')[0];
+            return enabledSymbols.includes(base);
+        });
     }, [cryptoCurrencies]);
 
-    const [activePair, setActivePair] = useState(availablePairs[0] || '');
+    const [activePair, setActivePair] = useState(enabledPairs[0] || 'BTC/USD');
     const [chartData, setChartData] = useState<CandlestickData[]>([]);
     const [marketStats, setMarketStats] = useState({ high: 0, low: 0, volume: 0 });
     const [activeTab, setActiveTab] = useState<'open' | 'history'>('open');
+    const [isLoadingChart, setIsLoadingChart] = useState(true);
 
     const [tradeAmount, setTradeAmount] = useState('100');
     const [tradeDuration, setTradeDuration] = useState(tradeSettings.durationOptions[0] || 60);
     const [isProcessing, setIsProcessing] = useState(false);
     const openTrades = user?.openTrades || [];
     
-    const activePairSymbol = activePair ? activePair.split('/')[0] : '';
-    const isPairEnabled = availablePairs.includes(activePair);
-
+    // Derived state
     const lastPrice = chartData.length > 0 ? chartData[chartData.length - 1].close : 0;
-    const prevPrice = chartData.length > 1 ? chartData[chartData.length - 2].close : 0;
+    const prevPrice = chartData.length > 1 ? chartData[chartData.length - 2].close : lastPrice;
     const priceChange = lastPrice - prevPrice;
     const tradeHistory = user?.tradeHistory || [];
+    const isPairEnabled = enabledPairs.includes(activePair);
 
-    // Refs
+    // Refs for Websockets and Intervals
+    const wsKlineRef = useRef<WebSocket | null>(null);
+    const wsTickerRef = useRef<WebSocket | null>(null);
     const openTradesRef = useRef(openTrades);
     const chartDataRef = useRef(chartData);
     const tradeDurationRef = useRef(tradeDuration);
     const settingsRef = useRef(tradeSettings);
 
+    // Sync refs
     useEffect(() => { openTradesRef.current = openTrades; }, [openTrades]);
     useEffect(() => { chartDataRef.current = chartData; }, [chartData]);
     useEffect(() => { tradeDurationRef.current = tradeDuration; }, [tradeDuration]);
     useEffect(() => { settingsRef.current = tradeSettings; }, [tradeSettings]);
 
-    // Sync default duration if settings change
+    // Sync default duration
     useEffect(() => {
         if (tradeSettings.durationOptions.length > 0 && !tradeSettings.durationOptions.includes(tradeDuration)) {
             setTradeDuration(tradeSettings.durationOptions[0]);
@@ -126,74 +97,89 @@ const TradeNow: React.FC = () => {
         return openTrades.filter(t => t.pair === activePair);
     }, [openTrades, activePair]);
 
+    // --- Fetch Historical Data & Connect WebSocket ---
     useEffect(() => {
-        if (!activePair && availablePairs.length > 0) {
-            setActivePair(availablePairs[0]);
-        } else if (activePair && !availablePairs.includes(activePair)) {
-            setActivePair(availablePairs[0] || '');
-        }
-    }, [availablePairs, activePair]);
+        const binanceSymbol = BINANCE_SYMBOL_MAP[activePair];
+        if (!binanceSymbol) return;
 
-    useEffect(() => {
-        let interval: ReturnType<typeof setInterval>;
-        const fetchAndInitialize = async () => {
-            if (!activePair || !PAIR_DATA[activePair]) return;
-
-            let startPrice = PAIR_DATA[activePair].basePrice;
-            const coinId = COIN_IDS[activePair];
-
-            if (coinId) {
-                try {
-                    const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${coinId}&vs_currencies=usd&x_cg_demo_api_key=CG-VCL6LmzHAxs5NxCBWqxR8Pp3`);
-                    const data = await response.json();
-                    if (data[coinId]?.usd) {
-                        startPrice = data[coinId].usd;
-                    }
-                } catch (error) {
-                    console.warn('Failed to fetch live price, using base.', error);
-                }
-            }
-
-            const data = generateInitialData(startPrice);
-            if (data.length > 0) {
-                const lastGeneratedClose = data[data.length - 1].close;
-                const priceDifference = startPrice - lastGeneratedClose;
-                const alignedData = data.map(d => ({
-                    ...d,
-                    open: d.open + priceDifference,
-                    high: d.high + priceDifference,
-                    low: d.low + priceDifference,
-                    close: d.close + priceDifference
+        setIsLoadingChart(true);
+        setChartData([]); // Clear previous data
+        
+        // 1. Fetch Historical Data via REST API
+        fetch(`https://api.binance.com/api/v3/klines?symbol=${binanceSymbol.toUpperCase()}&interval=1m&limit=500`)
+            .then(res => res.json())
+            .then(data => {
+                // Binance format: [Open Time, Open, High, Low, Close, Volume, ...]
+                const formattedData: CandlestickData[] = data.map((d: any) => ({
+                    time: d[0] / 1000,
+                    open: parseFloat(d[1]),
+                    high: parseFloat(d[2]),
+                    low: parseFloat(d[3]),
+                    close: parseFloat(d[4]),
                 }));
-                setChartData(alignedData);
-            } else {
-                setChartData(data);
-            }
+                setChartData(formattedData);
+                setIsLoadingChart(false);
+            })
+            .catch(err => {
+                console.error("Error fetching historical klines:", err);
+                setIsLoadingChart(false);
+            });
 
-            interval = setInterval(() => {
-                setChartData(prevData => {
-                    if (prevData.length === 0) return [];
-                    const lastCandle = prevData[prevData.length - 1];
-                    const newCandle = generateCandle(lastCandle, lastCandle.close);
-                    return [...prevData.slice(1), newCandle];
+        // 2. Close existing WebSockets
+        if (wsKlineRef.current) wsKlineRef.current.close();
+        if (wsTickerRef.current) wsTickerRef.current.close();
+
+        // 3. Connect Kline WebSocket (Candlesticks)
+        wsKlineRef.current = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSymbol}@kline_1m`);
+        wsKlineRef.current.onmessage = (event) => {
+            const message = JSON.parse(event.data);
+            const k = message.k;
+            
+            if (k) {
+                const candle: CandlestickData = {
+                    time: k.t / 1000,
+                    open: parseFloat(k.o),
+                    high: parseFloat(k.h),
+                    low: parseFloat(k.l),
+                    close: parseFloat(k.c),
+                };
+
+                setChartData(prev => {
+                    const lastCandle = prev[prev.length - 1];
+                    // Update current candle if time matches, else push new
+                    if (lastCandle && lastCandle.time === candle.time) {
+                        const newData = [...prev];
+                        newData[newData.length - 1] = candle;
+                        return newData;
+                    } else {
+                        return [...prev, candle];
+                    }
                 });
-            }, 3000);
+            }
         };
 
-        fetchAndInitialize();
-        return () => clearInterval(interval);
-    }, [activePair]);
+        // 4. Connect Ticker WebSocket (24h Stats)
+        wsTickerRef.current = new WebSocket(`wss://stream.binance.com:9443/ws/${binanceSymbol}@ticker`);
+        wsTickerRef.current.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            // data.h = high, data.l = low, data.v = volume, data.c = current price (already in kline but useful fallback)
+            if (data) {
+                setMarketStats({
+                    high: parseFloat(data.h),
+                    low: parseFloat(data.l),
+                    volume: parseFloat(data.v)
+                });
+            }
+        };
 
-    useEffect(() => {
-        if (chartData.length > 0) {
-            const last24hData = chartData.slice(-24 * 20);
-            const high = Math.max(...last24hData.map(d => d.high));
-            const low = Math.min(...last24hData.map(d => d.low));
-            const volume = Math.random() * 10000 + 5000;
-            setMarketStats({ high, low, volume });
-        }
-    }, [chartData]);
+        return () => {
+            if (wsKlineRef.current) wsKlineRef.current.close();
+            if (wsTickerRef.current) wsTickerRef.current.close();
+        };
+
+    }, [activePair]);
     
+    // --- Trade Logic ---
     const handlePlaceTrade = async (type: 'HIGH' | 'LOW') => {
         if (isProcessing) return;
 
@@ -203,7 +189,7 @@ const TradeNow: React.FC = () => {
         }
 
         if (!isPairEnabled) {
-            alert('This pair is currently under maintenance.');
+            alert('This pair is currently disabled.');
             return;
         }
         
@@ -237,7 +223,7 @@ const TradeNow: React.FC = () => {
 
             const result = await placeTrade(newTrade, amount);
             if (!result.success) alert(result.message);
-            else await new Promise(resolve => setTimeout(resolve, 1000));
+            else await new Promise(resolve => setTimeout(resolve, 500));
         } catch (error) {
             console.error("Trade error:", error);
         } finally {
@@ -245,6 +231,7 @@ const TradeNow: React.FC = () => {
         }
     };
 
+    // --- Trade Resolution Loop ---
     useEffect(() => {
         const tradeResolutionInterval = setInterval(() => {
             const now = Date.now();
@@ -258,6 +245,7 @@ const TradeNow: React.FC = () => {
             
             currentOpenTrades.forEach(trade => {
                 if (now >= trade.expiryTimestamp) {
+                    // Get current price from live chart data
                     const currentPrice = currentChartData.length > 0 ? currentChartData[currentChartData.length - 1].close : trade.entryPrice;
                     const isWin = (trade.type === 'HIGH' && currentPrice > trade.entryPrice) || (trade.type === 'LOW' && currentPrice < trade.entryPrice);
                     
@@ -296,30 +284,45 @@ const TradeNow: React.FC = () => {
                 <div className="lg:col-span-2 bg-white dark:bg-slate-800 p-4 sm:p-6 rounded-lg shadow">
                     <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b dark:border-slate-700 pb-4 mb-4">
                          <div className="flex items-center gap-3">
-                            <select value={activePair} onChange={(e) => setActivePair(e.target.value)} className="font-semibold text-lg bg-transparent text-gray-800 dark:text-gray-200 focus:outline-none">
-                                {availablePairs.map(pair => <option key={pair} value={pair}>{pair}</option>)}
+                            <select value={activePair} onChange={(e) => setActivePair(e.target.value)} className="font-semibold text-lg bg-transparent text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer">
+                                {enabledPairs.map(pair => <option key={pair} value={pair}>{pair}</option>)}
                             </select>
                         </div>
                         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
                             <div className="text-center sm:text-right">
-                                <p className={`text-xl font-bold ${priceChange >= 0 ? 'text-success' : 'text-danger'}`}>{lastPrice.toFixed(2)}</p>
+                                <p className={`text-xl font-bold ${priceChange >= 0 ? 'text-success' : 'text-danger'}`}>
+                                    {isLoadingChart ? '...' : lastPrice.toFixed(2)}
+                                </p>
                                 <p className="text-gray-500 dark:text-gray-400">Price (USD)</p>
                             </div>
                             <div className="text-center sm:text-right">
-                                <p className="text-gray-800 dark:text-gray-200 font-medium">{marketStats.high.toFixed(2)}</p>
+                                <p className="text-gray-800 dark:text-gray-200 font-medium">
+                                    {isLoadingChart ? '...' : marketStats.high.toFixed(2)}
+                                </p>
                                 <p className="text-gray-500 dark:text-gray-400">24h High</p>
                             </div>
                             <div className="text-center sm:text-right">
-                                <p className="text-gray-800 dark:text-gray-200 font-medium">{marketStats.low.toFixed(2)}</p>
+                                <p className="text-gray-800 dark:text-gray-200 font-medium">
+                                    {isLoadingChart ? '...' : marketStats.low.toFixed(2)}
+                                </p>
                                 <p className="text-gray-500 dark:text-gray-400">24h Low</p>
                             </div>
                             <div className="text-center sm:text-right">
-                                <p className="text-gray-800 dark:text-gray-200 font-medium">{marketStats.volume.toFixed(2)} {activePair.split('/')[0]}</p>
+                                <p className="text-gray-800 dark:text-gray-200 font-medium">
+                                    {isLoadingChart ? '...' : marketStats.volume.toFixed(2)}
+                                </p>
                                 <p className="text-gray-500 dark:text-gray-400">24h Volume</p>
                             </div>
                         </div>
                     </div>
-                    <CandlestickChart data={chartData} activeTrades={chartActiveTrades} />
+                    <div className="relative min-h-[400px]">
+                        {isLoadingChart && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/50 dark:bg-slate-800/50 z-10">
+                                <Loader2 size={40} className="animate-spin text-primary" />
+                            </div>
+                        )}
+                        <CandlestickChart data={chartData} activeTrades={chartActiveTrades} />
+                    </div>
                 </div>
                 <div className="bg-slate-800/80 backdrop-blur-sm border border-slate-700 rounded-lg shadow-2xl p-6 text-gray-300">
                     {isPairEnabled ? (
@@ -381,8 +384,8 @@ const TradeNow: React.FC = () => {
                     ) : (
                         <div className="flex flex-col items-center justify-center h-full text-center">
                             <ShieldAlert size={48} className="text-yellow-500 mb-4" />
-                            <h3 className="text-lg font-semibold text-yellow-400">Under Maintenance</h3>
-                            <p className="text-gray-400 mt-2">This trading pair is temporarily unavailable.</p>
+                            <h3 className="text-lg font-semibold text-yellow-400">Disabled</h3>
+                            <p className="text-gray-400 mt-2">This trading pair is currently disabled.</p>
                         </div>
                     )}
                 </div>
